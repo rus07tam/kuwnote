@@ -1,6 +1,15 @@
 name: Build Android (APK & AAB)
 
 on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
   pull_request:
     paths:
       - 'src/**'
@@ -18,6 +27,16 @@ on:
           - apk
           - aab
           - both
+      target_arch:
+        description: 'Target Architecture'
+        required: false
+        default: 'aarch64'
+        type: choice
+        options:
+          - aarch64
+          - armv7
+          - x86_64
+          - all
 
 permissions:
   contents: read
@@ -43,8 +62,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK Environment
+        shell: bash
+        run: |
+          ANDROID_SDK_DIR="/usr/local/lib/android/sdk"
+          if [ ! -d "$ANDROID_SDK_DIR" ] && [ -d "$ANDROID_HOME" ]; then
+            ANDROID_SDK_DIR="$ANDROID_HOME"
+          fi
+          echo "ANDROID_HOME=$ANDROID_SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_DIR" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_DIR/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_DIR/platform-tools" >> $GITHUB_PATH
+          
+          # Accept SDK licenses non-interactively
+          if [ -f "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          fi
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -52,6 +85,14 @@ jobs:
         with:
           ndk-version: r26d
           link-to-sdk: true
+
+      - name: Configure NDK Environment
+        shell: bash
+        run: |
+          NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$NDK_PATH" >> $GITHUB_ENV
 
       - name: Setup Rust with Android targets
         uses: dtolnay/rust-toolchain@stable
@@ -67,7 +108,7 @@ jobs:
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci || npm install
           else
             npm install
           fi
@@ -80,22 +121,30 @@ jobs:
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
             echo "Initializing Tauri Android target..."
-            npm run tauri android init -- --ci --skip-targets-install
+            npx tauri android init --ci --skip-targets-install
+          fi
+          if [ -f "src-tauri/gen/android/gradlew" ]; then
+            chmod +x src-tauri/gen/android/gradlew
           fi
 
       - name: Build Android Targets
         shell: bash
         run: |
           BUILD_OPT="${{ github.event.inputs.build_type || 'apk' }}"
-          if [ "$BUILD_OPT" = "apk" ]; then
-            npm run tauri android build -- --apk
-          elif [ "$BUILD_OPT" = "aab" ]; then
-            npm run tauri android build -- --aab
-          else
-            npm run tauri android build -- --apk --aab
+          TARGET_ARCH="${{ github.event.inputs.target_arch || 'aarch64' }}"
+
+          TARGET_FLAG=""
+          if [ "$TARGET_ARCH" != "all" ]; then
+            TARGET_FLAG="--target $TARGET_ARCH"
           fi
-        env:
-          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+          if [ "$BUILD_OPT" = "apk" ]; then
+            npx tauri android build --apk $TARGET_FLAG --ci
+          elif [ "$BUILD_OPT" = "aab" ]; then
+            npx tauri android build --aab $TARGET_FLAG --ci
+          else
+            npx tauri android build --apk --aab $TARGET_FLAG --ci
+          fi
 
       - name: Collect Android Outputs
         id: collect

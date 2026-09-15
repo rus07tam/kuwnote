@@ -1,6 +1,15 @@
 name: Build Desktop (Windows, macOS, Linux)
 
 on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
   pull_request:
     paths:
       - 'src/**'
@@ -58,16 +67,29 @@ jobs:
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci || npm install
           else
             npm install
+          fi
+
+          # Fix for npm bug #4828: optional platform-specific native binaries omitted across OSes
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            if [ ! -d "node_modules/@rollup/rollup-win32-x64-msvc" ]; then
+              echo "Installing Windows native rollup module..."
+              npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3
+            fi
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            if [ ! -d "node_modules/@rollup/rollup-darwin-arm64" ] && [ ! -d "node_modules/@rollup/rollup-darwin-x64" ]; then
+              echo "Installing macOS native rollup module..."
+              npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3
+            fi
           fi
 
       - name: Build Web Frontend
         run: npm run build
 
       - name: Build Desktop Bundles
-        run: npm run tauri build
+        run: npx tauri build
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
