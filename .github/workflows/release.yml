@@ -70,16 +70,29 @@ jobs:
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci || npm install
           else
             npm install
+          fi
+
+          # Fix for npm bug #4828: optional platform-specific native binaries omitted across OSes
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            if [ ! -d "node_modules/@rollup/rollup-win32-x64-msvc" ]; then
+              echo "Installing Windows native rollup module..."
+              npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3
+            fi
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            if [ ! -d "node_modules/@rollup/rollup-darwin-arm64" ] && [ ! -d "node_modules/@rollup/rollup-darwin-x64" ]; then
+              echo "Installing macOS native rollup module..."
+              npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3
+            fi
           fi
 
       - name: Build Web Application
         run: npm run build
 
       - name: Build Desktop Binaries
-        run: npm run tauri build
+        run: npx tauri build
 
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4
@@ -98,10 +111,10 @@ jobs:
           if-no-files-found: warn
 
   # --------------------------------------------------------------------------
-  # 2. ANDROID BUILD (APK & AAB)
+  # 2. ANDROID BUILD (APK & AAB with Debug Signing)
   # --------------------------------------------------------------------------
   build-android:
-    name: Android (APK & AAB)
+    name: Android (APK with Debug Signing)
     runs-on: ubuntu-latest
 
     steps:
@@ -120,8 +133,22 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK Environment
+        shell: bash
+        run: |
+          ANDROID_SDK_DIR="/usr/local/lib/android/sdk"
+          if [ ! -d "$ANDROID_SDK_DIR" ] && [ -d "$ANDROID_HOME" ]; then
+            ANDROID_SDK_DIR="$ANDROID_HOME"
+          fi
+          echo "ANDROID_HOME=$ANDROID_SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_DIR" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_DIR/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_DIR/platform-tools" >> $GITHUB_PATH
+          
+          # Accept SDK licenses non-interactively
+          if [ -f "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | "$ANDROID_SDK_DIR/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          fi
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
@@ -129,6 +156,14 @@ jobs:
         with:
           ndk-version: r26d
           link-to-sdk: true
+
+      - name: Configure NDK Environment
+        shell: bash
+        run: |
+          NDK_PATH="${{ steps.setup-ndk.outputs.ndk-path }}"
+          echo "NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$NDK_PATH" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=$NDK_PATH" >> $GITHUB_ENV
 
       - name: Setup Rust with Android Targets
         uses: dtolnay/rust-toolchain@stable
@@ -140,11 +175,29 @@ jobs:
         with:
           workspaces: 'src-tauri -> target'
 
+      - name: Create Android Debug Keystore
+        shell: bash
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating standard Android debug keystore..."
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          ls -l ~/.android/debug.keystore
+
       - name: Install dependencies
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
-            npm ci
+            npm ci || npm install
           else
             npm install
           fi
@@ -157,23 +210,93 @@ jobs:
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
             echo "Initializing Tauri Android target..."
-            npm run tauri android init -- --ci --skip-targets-install
+            npx tauri android init --ci --skip-targets-install
+          fi
+          if [ -f "src-tauri/gen/android/gradlew" ]; then
+            chmod +x src-tauri/gen/android/gradlew
+          fi
+
+      - name: Configure Gradle Signing with Debug Certificate
+        shell: bash
+        run: |
+          GRADLE_KTS="src-tauri/gen/android/app/build.gradle.kts"
+          GRADLE_GROOVY="src-tauri/gen/android/app/build.gradle"
+
+          if [ -f "$GRADLE_KTS" ]; then
+            echo "Configuring release signing config in $GRADLE_KTS..."
+            if ! grep -q 'signingConfig = signingConfigs' "$GRADLE_KTS"; then
+              sed -i 's/getByName("release") {/getByName("release") {\n            signingConfig = signingConfigs.getByName("debug")/' "$GRADLE_KTS"
+            fi
+          elif [ -f "$GRADLE_GROOVY" ]; then
+            echo "Configuring release signing config in $GRADLE_GROOVY..."
+            if ! grep -q 'signingConfig signingConfigs' "$GRADLE_GROOVY"; then
+              sed -i 's/release {/release {\n            signingConfig signingConfigs.debug/' "$GRADLE_GROOVY"
+            fi
           fi
 
       - name: Build Android APK
-        run: npm run tauri android build -- --apk
-        env:
-          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-
-      - name: Collect Android Executables
-        id: collect-apks
         shell: bash
         run: |
+          echo "Building Android APK..."
+          npx tauri android build --apk --target aarch64 --ci
+
+      - name: Sign & Verify Android Artifacts with Debug Certificate
+        shell: bash
+        run: |
+          BUILD_TOOLS_DIR=$(ls -d /usr/local/lib/android/sdk/build-tools/* | sort -V | tail -n 1)
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+
+          echo "Found apksigner at: $APKSIGNER"
+          echo "Found zipalign at: $ZIPALIGN"
+
           mkdir -p dist-android
-          echo "Searching for generated APK and AAB files..."
-          find src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} dist-android/ \; || true
-          echo "Collected files in dist-android:"
-          ls -lh dist-android || true
+
+          # Process all APK files
+          while IFS= read -r -d '' apk; do
+            echo "--- Checking APK: $apk ---"
+            FILENAME=$(basename "$apk")
+
+            # Check existing signature
+            if "$APKSIGNER" verify "$apk" >/dev/null 2>&1; then
+              echo "Valid signature already present on $FILENAME"
+              cp "$apk" "dist-android/$FILENAME"
+            else
+              echo "$FILENAME is unsigned or invalid. Aligning and signing with debug certificate..."
+              OUTNAME="${FILENAME/-unsigned/-signed}"
+              if [ "$OUTNAME" = "$FILENAME" ]; then
+                OUTNAME="signed-$FILENAME"
+              fi
+
+              # Zipalign
+              "$ZIPALIGN" -f -p 4 "$apk" "dist-android/$OUTNAME" || cp "$apk" "dist-android/$OUTNAME"
+
+              # Sign with apksigner (v1, v2, v3 schemes)
+              "$APKSIGNER" sign \
+                --ks ~/.android/debug.keystore \
+                --ks-pass pass:android \
+                --key-pass pass:android \
+                --ks-key-alias androiddebugkey \
+                --v1-signing-enabled true \
+                --v2-signing-enabled true \
+                --v3-signing-enabled true \
+                "dist-android/$OUTNAME"
+
+              # Also maintain primary output name as signed copy
+              cp "dist-android/$OUTNAME" "dist-android/$FILENAME"
+            fi
+          done < <(find src-tauri/gen/android -type f -name "*.apk" -print0)
+
+          # Verify all final APK packages in dist-android
+          echo "=== Verification Results for Uploaded APKs ==="
+          for apk in dist-android/*.apk; do
+            if [ -f "$apk" ]; then
+              echo "Verifying $(basename "$apk"):"
+              "$APKSIGNER" verify --verbose "$apk"
+            fi
+          done
+
+          ls -lh dist-android
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
@@ -227,13 +350,13 @@ jobs:
           body: |
             ## Kuwnote Release ${{ steps.release_tag.outputs.tag }}
 
-            Automated multi-platform build for Kuwnote.
+            Automated multi-platform build for Kuwnote with debug signing for direct installation.
             
             ### Included Packages:
             - **Windows**: `.exe` (NSIS Installer), `.msi`
             - **macOS**: `.dmg`, `.app`
             - **Linux**: `.deb`, `.AppImage`
-            - **Android**: `.apk`
+            - **Android**: `.apk` (signed with debug certificate)
           files: release-files/*
           draft: false
           prerelease: false
