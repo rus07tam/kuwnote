@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+    <linearGradient id="sheet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f3f4f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- Note Sheet Symbol -->
+  <g transform="translate(106, 86)">
+    <rect x="0" y="0" width="300" height="340" rx="28" fill="url(#sheet)" filter="drop-shadow(0 12px 24px rgba(0,0,0,0.25))"/>
+    <!-- Folded top corner accent -->
+    <path d="M 230 0 L 300 70 L 230 70 Z" fill="#e0e7ff"/>
+    <!-- Note Lines -->
+    <rect x="44" y="90" width="130" height="20" rx="10" fill="#4f46e5"/>
+    <rect x="44" y="140" width="212" height="14" rx="7" fill="#94a3b8"/>
+    <rect x="44" y="174" width="212" height="14" rx="7" fill="#cbd5e1"/>
+    <rect x="44" y="208" width="160" height="14" rx="7" fill="#cbd5e1"/>
+    <!-- Checkmark bullet -->
+    <circle cx="56" cy="262" r="12" fill="#10b981"/>
+    <path d="M 52 262 L 55 265 L 61 259" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="80" y="255" width="176" height="14" rx="7" fill="#94a3b8"/>
+  </g>
+</svg>

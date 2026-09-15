@@ -1,0 +1,6 @@
+{
+  "name": "Kuwnote",
+  "description": "Tauri-ready modern modular workspace note-taking app with Notion/Obsidian rich blocks, dynamic layout, and plugin API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

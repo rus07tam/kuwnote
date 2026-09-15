@@ -1,0 +1,93 @@
+name: Build Android (APK & AAB)
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Android Build Type'
+        required: true
+        default: 'apk'
+        type: choice
+        options:
+          - apk
+          - aab
+          - both
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Android Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK & Platform Tools
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.3.11579264" "build-tools;34.0.0" "platforms;android-34"
+          echo "NDK_HOME=${ANDROID_HOME}/ndk/26.3.11579264" >> $GITHUB_ENV
+
+      - name: Setup Rust with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build Web Frontend
+        run: npm run build
+
+      - name: Initialize Android Project
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npm run tauri android init -- --ci --skip-targets-install
+          fi
+
+      - name: Build Android Targets
+        run: |
+          npm run tauri android build -- --apk
+        env:
+          NDK_HOME: ${{ env.NDK_HOME }}
+
+      - name: Collect Android Outputs
+        id: collect
+        run: |
+          mkdir -p dist-android
+          find src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} dist-android/ \;
+          ls -lh dist-android
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kuwnote-android-apk
+          path: dist-android/*
+          if-no-files-found: warn
