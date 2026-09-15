@@ -30,7 +30,7 @@ export const ContentArea: React.FC = () => {
   const pluginContentView = pluginRegistry.getContentView(layout.activeNavTab);
   if (pluginContentView) {
     return (
-      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto overflow-x-hidden bg-white dark:bg-zinc-950">
         <div className="mx-auto max-w-5xl p-6">
           <h2 className="mb-4 text-xl font-bold text-zinc-900 dark:text-zinc-50">
             {pluginContentView.title}
@@ -44,7 +44,7 @@ export const ContentArea: React.FC = () => {
   // If a document is active, display the editor
   if (activeDocId && activeDocument) {
     return (
-      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950">
+      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto overflow-x-hidden bg-white dark:bg-zinc-950">
         <DocumentEditor />
       </main>
     );
@@ -53,12 +53,12 @@ export const ContentArea: React.FC = () => {
   // If settings tab is active and no doc is open, show settings directly in main content
   if (layout.activeNavTab === 'settings') {
     return (
-      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950 p-6">
+      <main id="kuwnote-content-area" className="flex-1 overflow-y-auto overflow-x-hidden bg-white dark:bg-zinc-950 p-6">
         <div className="mx-auto max-w-xl">
           <h2 className="mb-4 text-xl font-bold text-zinc-900 dark:text-zinc-50">
             Настройки Kuwnote
           </h2>
-          <SettingsPanel />
+          <SettingsPanel isEmbedded={true} />
         </div>
       </main>
     );
@@ -71,7 +71,7 @@ export const ContentArea: React.FC = () => {
   return (
     <main
       id="kuwnote-content-area"
-      className="flex flex-1 flex-col items-center justify-center overflow-y-auto bg-zinc-50/50 p-8 text-center dark:bg-zinc-950"
+      className="flex flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-zinc-50/50 p-8 text-center dark:bg-zinc-950"
     >
       <div className="mx-auto max-w-md space-y-5 animate-in fade-in zoom-in-95">
         {/* Subtle decorative icon */}

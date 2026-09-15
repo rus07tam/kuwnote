@@ -17,14 +17,16 @@ interface InlineRichToolbarProps {
   className?: string;
 }
 
-const COLOR_OPTIONS: { id: RichTextColor; label: string; class: string }[] = [
-  { id: 'default', label: 'По умолчанию', class: 'bg-zinc-800 dark:bg-zinc-200' },
-  { id: 'red', label: 'Красный', class: 'bg-red-500' },
-  { id: 'green', label: 'Зеленый', class: 'bg-emerald-500' },
-  { id: 'blue', label: 'Синий', class: 'bg-blue-500' },
-  { id: 'amber', label: 'Янтарный', class: 'bg-amber-500' },
-  { id: 'purple', label: 'Фиолетовый', class: 'bg-purple-500' },
-  { id: 'pink', label: 'Розовый', class: 'bg-pink-500' },
+const COLOR_OPTIONS: { id: RichTextColor; label: string; class: string; dotHex: string }[] = [
+  { id: 'default', label: 'По умолчанию', class: 'bg-zinc-800 dark:bg-zinc-200', dotHex: '#3f3f46' },
+  { id: 'muted', label: 'Приглушенный', class: 'bg-zinc-400 dark:bg-zinc-500', dotHex: '#71717a' },
+  { id: 'red', label: 'Красный', class: 'bg-red-500', dotHex: '#ef4444' },
+  { id: 'green', label: 'Зеленый', class: 'bg-emerald-500', dotHex: '#10b981' },
+  { id: 'blue', label: 'Синий', class: 'bg-blue-500', dotHex: '#3b82f6' },
+  { id: 'amber', label: 'Янтарный', class: 'bg-amber-500', dotHex: '#f59e0b' },
+  { id: 'purple', label: 'Фиолетовый', class: 'bg-purple-500', dotHex: '#a855f7' },
+  { id: 'pink', label: 'Розовый', class: 'bg-pink-500', dotHex: '#ec4899' },
+  { id: 'cyan', label: 'Голубой', class: 'bg-cyan-500', dotHex: '#06b6d4' },
 ];
 
 export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
@@ -35,15 +37,19 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
   const [showColors, setShowColors] = React.useState(false);
   const [showSizes, setShowSizes] = React.useState(false);
 
+  const activeColorObj = COLOR_OPTIONS.find((c) => c.id === activeSpan.color);
+
   return (
     <div
+      onMouseDown={(e) => e.preventDefault()}
       className={cn(
-        'relative inline-flex items-center gap-0.5 rounded-lg border border-zinc-200 bg-white/95 p-1 shadow-lg backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95',
+        'relative inline-flex items-center gap-0.5 rounded-lg border border-zinc-200 bg-white/95 p-1 shadow-lg backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95 select-none',
         className
       )}
     >
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onToggleFormat('bold', !activeSpan.bold)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded transition-colors',
@@ -58,6 +64,7 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
 
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onToggleFormat('italic', !activeSpan.italic)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded transition-colors',
@@ -72,6 +79,7 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
 
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onToggleFormat('underline', !activeSpan.underline)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded transition-colors',
@@ -79,13 +87,14 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
             ? 'bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
             : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
         )}
-        title="Подчеркнутый"
+        title="Подчеркнутый (Ctrl+U)"
       >
         <Underline className="h-3.5 w-3.5" />
       </button>
 
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onToggleFormat('strikethrough', !activeSpan.strikethrough)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded transition-colors',
@@ -100,6 +109,7 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
 
       <button
         type="button"
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onToggleFormat('code', !activeSpan.code)}
         className={cn(
           'flex h-7 w-7 items-center justify-center rounded transition-colors',
@@ -118,33 +128,49 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
       <div className="relative">
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setShowColors(!showColors);
             setShowSizes(false);
           }}
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800',
-            activeSpan.color && activeSpan.color !== 'default' && 'text-indigo-600 dark:text-indigo-400'
+            'relative flex h-7 w-7 items-center justify-center rounded transition-colors',
+            activeSpan.color && activeSpan.color !== 'default'
+              ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+              : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
           )}
           title="Цвет текста"
         >
           <Palette className="h-3.5 w-3.5" />
+          {activeColorObj && activeColorObj.id !== 'default' && (
+            <span
+              className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full ring-1 ring-white dark:ring-zinc-900"
+              style={{ backgroundColor: activeColorObj.dotHex }}
+            />
+          )}
         </button>
 
         {showColors && (
-          <div className="absolute left-0 top-full mt-1 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div
+            onMouseDown={(e) => e.preventDefault()}
+            className="absolute left-0 top-full mt-1 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+          >
             {COLOR_OPTIONS.map((c) => (
               <button
                 key={c.id}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onToggleFormat('color', c.id);
                   setShowColors(false);
                 }}
-                className="flex h-5 w-5 items-center justify-center rounded-full hover:scale-110 transition-transform"
+                className={cn(
+                  'flex h-5 w-5 items-center justify-center rounded-full hover:scale-125 transition-transform',
+                  activeSpan.color === c.id && 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900'
+                )}
                 title={c.label}
               >
-                <span className={cn('h-3.5 w-3.5 rounded-full', c.class)} />
+                <span className={cn('h-3.5 w-3.5 rounded-full shadow-2xs', c.class)} />
               </button>
             ))}
           </div>
@@ -155,18 +181,27 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
       <div className="relative">
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setShowSizes(!showSizes);
             setShowColors(false);
           }}
-          className="flex h-7 w-7 items-center justify-center rounded text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          className={cn(
+            'flex h-7 w-7 items-center justify-center rounded transition-colors',
+            activeSpan.size && activeSpan.size !== 'base'
+              ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100'
+              : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+          )}
           title="Размер шрифта"
         >
           <Type className="h-3.5 w-3.5" />
         </button>
 
         {showSizes && (
-          <div className="absolute left-0 top-full mt-1 z-50 flex flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+          <div
+            onMouseDown={(e) => e.preventDefault()}
+            className="absolute left-0 top-full mt-1 z-50 flex flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+          >
             {(
               [
                 { id: 'sm', label: 'Маленький' },
@@ -178,13 +213,14 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
               <button
                 key={s.id}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onToggleFormat('size', s.id);
                   setShowSizes(false);
                 }}
                 className={cn(
-                  'px-2 py-1 text-left text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800',
-                  activeSpan.size === s.id && 'font-bold text-indigo-600 dark:text-indigo-400'
+                  'px-2 py-1 text-left text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors',
+                  activeSpan.size === s.id && 'font-bold text-indigo-600 dark:text-indigo-400 bg-zinc-50 dark:bg-zinc-800'
                 )}
               >
                 {s.label}

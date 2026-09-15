@@ -10,9 +10,31 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     user-select: text;
   }
+
+  /* Editable block placeholder and focus outlines */
+  [contenteditable] {
+    outline: none !important;
+  }
+
+  [contenteditable]:empty::before {
+    content: attr(data-placeholder);
+    color: #a1a1aa;
+    pointer-events: none;
+    font-style: normal;
+    font-weight: normal;
+  }
+
+  .dark [contenteditable]:empty::before {
+    color: #71717a;
+  }
 }
 
-/* Custom sleek scrollbars */
+/* Custom sleek scrollbars (Webkit & Firefox) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(160, 160, 160, 0.25) transparent;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -30,4 +52,5 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(150, 150, 150, 0.45);
 }
+
 

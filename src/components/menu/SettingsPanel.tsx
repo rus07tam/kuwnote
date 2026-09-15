@@ -21,7 +21,11 @@ import {
 import { cn } from '../../lib/utils';
 import { AccentColor, NavPosition, MenuPosition, MenuType, AppTheme } from '../../types';
 
-export const SettingsPanel: React.FC = () => {
+interface SettingsPanelProps {
+  isEmbedded?: boolean;
+}
+
+export const SettingsPanel: React.FC<SettingsPanelProps> = ({ isEmbedded = false }) => {
   const { settings, updateSettings, layout, updateLayout } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,7 +75,12 @@ export const SettingsPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-3 space-y-5 text-xs text-zinc-700 dark:text-zinc-300">
+    <div
+      className={cn(
+        'space-y-5 text-xs text-zinc-700 dark:text-zinc-300',
+        isEmbedded ? 'p-0 pb-12' : 'flex h-full flex-col overflow-y-auto p-3'
+      )}
+    >
       {/* App Header info */}
       <div className="rounded-xl border border-zinc-200/80 bg-zinc-100/50 p-3 dark:border-zinc-800/80 dark:bg-zinc-900/50">
         <div className="flex items-center gap-2.5">

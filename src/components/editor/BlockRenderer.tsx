@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { DocumentBlock, RichTextSpan, BlockType, TableData } from '../../types';
+import { DocumentBlock, RichTextSpan, BlockType, TableData, RichTextColor, RichTextSize } from '../../types';
 import { InlineRichToolbar } from './InlineRichToolbar';
 import { cn } from '../../lib/utils';
 import {
@@ -11,6 +11,7 @@ import {
   Trash2,
   Indent,
   Outdent,
+  Palette,
 } from 'lucide-react';
 
 interface BlockRendererProps {
@@ -20,6 +21,182 @@ interface BlockRendererProps {
   searchHighlight?: string;
 }
 
+export const COLOR_CLASSES: Record<RichTextColor, string> = {
+  default: 'text-zinc-900 dark:text-zinc-100',
+  muted: 'text-zinc-400 dark:text-zinc-500',
+  red: 'text-red-600 dark:text-red-400',
+  green: 'text-emerald-600 dark:text-emerald-400',
+  blue: 'text-blue-600 dark:text-blue-400',
+  amber: 'text-amber-600 dark:text-amber-400',
+  purple: 'text-purple-600 dark:text-purple-400',
+  pink: 'text-pink-600 dark:text-pink-400',
+  cyan: 'text-cyan-600 dark:text-cyan-400',
+};
+
+export const SIZE_CLASSES: Record<RichTextSize, string> = {
+  sm: 'text-xs',
+  base: 'text-sm',
+  lg: 'text-base',
+  xl: 'text-lg',
+};
+
+// Convert spans into HTML with styling classes and data attributes for edit mode
+function spansToHtml(spans: RichTextSpan[]): string {
+  if (!spans || spans.length === 0) return '';
+  return spans
+    .map((span) => {
+      const colorClass = span.color && span.color !== 'default' ? COLOR_CLASSES[span.color] : '';
+      const sizeClass = span.size ? SIZE_CLASSES[span.size] : '';
+      const classes = [
+        'rich-span',
+        span.bold && 'font-bold',
+        span.italic && 'italic',
+        span.underline && 'underline underline-offset-2',
+        span.strikethrough && 'line-through text-zinc-400 dark:text-zinc-500',
+        span.code &&
+          'font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 px-1 py-0.5 rounded text-xs',
+        colorClass,
+        sizeClass,
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const dataAttrs = [
+        span.color && `data-color="${span.color}"`,
+        span.size && `data-size="${span.size}"`,
+        span.bold && 'data-bold="true"',
+        span.italic && 'data-italic="true"',
+        span.underline && 'data-underline="true"',
+        span.strikethrough && 'data-strikethrough="true"',
+        span.code && 'data-code="true"',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const escaped = (span.text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, '<br>');
+
+      return `<span class="${classes}" ${dataAttrs}>${escaped}</span>`;
+    })
+    .join('');
+}
+
+// Parse HTML DOM back into RichTextSpan array
+function parseSpansFromElement(el: HTMLElement): RichTextSpan[] {
+  const spans: RichTextSpan[] = [];
+
+  function traverse(node: Node, style: Partial<RichTextSpan>) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (text) {
+        spans.push({
+          id: `s_${Math.random().toString(36).substring(2, 8)}`,
+          text,
+          ...style,
+        });
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const elem = node as HTMLElement;
+      if (elem.tagName === 'BR') {
+        spans.push({
+          id: `s_${Math.random().toString(36).substring(2, 8)}`,
+          text: '\n',
+        });
+        return;
+      }
+
+      const nextStyle: Partial<RichTextSpan> = { ...style };
+      const color = elem.getAttribute('data-color') as RichTextColor;
+      if (color) nextStyle.color = color;
+      const size = elem.getAttribute('data-size') as RichTextSize;
+      if (size) nextStyle.size = size;
+
+      if (
+        elem.getAttribute('data-bold') === 'true' ||
+        elem.tagName === 'B' ||
+        elem.tagName === 'STRONG' ||
+        elem.classList.contains('font-bold')
+      ) {
+        nextStyle.bold = true;
+      }
+      if (
+        elem.getAttribute('data-italic') === 'true' ||
+        elem.tagName === 'I' ||
+        elem.tagName === 'EM' ||
+        elem.classList.contains('italic')
+      ) {
+        nextStyle.italic = true;
+      }
+      if (
+        elem.getAttribute('data-underline') === 'true' ||
+        elem.tagName === 'U' ||
+        elem.classList.contains('underline')
+      ) {
+        nextStyle.underline = true;
+      }
+      if (
+        elem.getAttribute('data-strikethrough') === 'true' ||
+        elem.tagName === 'S' ||
+        elem.classList.contains('line-through')
+      ) {
+        nextStyle.strikethrough = true;
+      }
+      if (
+        elem.getAttribute('data-code') === 'true' ||
+        elem.tagName === 'CODE' ||
+        elem.classList.contains('font-mono')
+      ) {
+        nextStyle.code = true;
+      }
+
+      // Check class-based colors
+      for (const [colName, colCls] of Object.entries(COLOR_CLASSES)) {
+        if (colName !== 'default' && elem.classList.contains(colCls.split(' ')[0])) {
+          nextStyle.color = colName as RichTextColor;
+          break;
+        }
+      }
+
+      for (let i = 0; i < elem.childNodes.length; i++) {
+        traverse(elem.childNodes[i], nextStyle);
+      }
+    }
+  }
+
+  for (let i = 0; i < el.childNodes.length; i++) {
+    traverse(el.childNodes[i], {});
+  }
+
+  if (spans.length === 0) {
+    return [{ id: 's1', text: '' }];
+  }
+
+  // Merge adjacent spans with identical formatting
+  const merged: RichTextSpan[] = [];
+  for (const s of spans) {
+    const prev = merged[merged.length - 1];
+    if (
+      prev &&
+      prev.bold === s.bold &&
+      prev.italic === s.italic &&
+      prev.underline === s.underline &&
+      prev.strikethrough === s.strikethrough &&
+      prev.code === s.code &&
+      prev.color === s.color &&
+      prev.size === s.size
+    ) {
+      prev.text += s.text;
+    } else {
+      merged.push({ ...s });
+    }
+  }
+  return merged;
+}
+
 export const BlockRenderer: React.FC<BlockRendererProps> = ({
   block,
   index,
@@ -27,7 +204,9 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
   searchHighlight,
 }) => {
   const {
+    activeDocument,
     updateBlock,
+    addBlock,
     duplicateBlock,
     moveBlock,
     deleteBlock,
@@ -36,9 +215,27 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
     openContextMenu,
   } = useApp();
 
-  const [isHovered, setIsHovered] = useState(false);
-  const [activeSpanIdx, setActiveSpanIdx] = useState<number>(0);
   const [showToolbar, setShowToolbar] = useState(false);
+  const [activeFormat, setActiveFormat] = useState<Partial<RichTextSpan>>({});
+  const editableRef = useRef<HTMLDivElement>(null);
+  const isTypingRef = useRef(false);
+
+  // Sync DOM with block.spans when not typing (e.g. block change, external update)
+  useEffect(() => {
+    if (!editableRef.current) return;
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      return;
+    }
+    const html = spansToHtml(block.spans || []);
+    if (editableRef.current.innerHTML !== html) {
+      editableRef.current.innerHTML = html;
+    }
+    // Update active format based on first span
+    if (block.spans && block.spans.length > 0) {
+      setActiveFormat(block.spans[0]);
+    }
+  }, [block.id, block.spans]);
 
   // Context Menu for Block
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -113,37 +310,156 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
     ]);
   };
 
-  // Format toggling for the active span
+  // Format toggling for the editable block (support selection or whole block)
   const handleToggleFormat = (key: keyof RichTextSpan, val?: any) => {
-    const spans = [...(block.spans || [])];
-    if (spans.length === 0) {
-      spans.push({ id: 's1', text: '' });
+    if (!editableRef.current) return;
+
+    setActiveFormat((prev) => ({ ...prev, [key]: val }));
+
+    const sel = window.getSelection();
+    let hasSelectionInside = false;
+
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      if (editableRef.current.contains(range.commonAncestorContainer)) {
+        hasSelectionInside = true;
+        // Wrap selected range with styled span
+        const span = document.createElement('span');
+        span.className = 'rich-span';
+        if (key === 'color') {
+          span.setAttribute('data-color', val);
+          if (val && val !== 'default') {
+            span.classList.add(...COLOR_CLASSES[val as RichTextColor].split(' '));
+          }
+        } else if (key === 'bold') {
+          if (val) {
+            span.setAttribute('data-bold', 'true');
+            span.classList.add('font-bold');
+          }
+        } else if (key === 'italic') {
+          if (val) {
+            span.setAttribute('data-italic', 'true');
+            span.classList.add('italic');
+          }
+        } else if (key === 'underline') {
+          if (val) {
+            span.setAttribute('data-underline', 'true');
+            span.classList.add('underline', 'underline-offset-2');
+          }
+        } else if (key === 'strikethrough') {
+          if (val) {
+            span.setAttribute('data-strikethrough', 'true');
+            span.classList.add('line-through', 'text-zinc-400');
+          }
+        } else if (key === 'code') {
+          if (val) {
+            span.setAttribute('data-code', 'true');
+            span.classList.add('font-mono', 'bg-zinc-100', 'dark:bg-zinc-800', 'px-1', 'py-0.5', 'rounded', 'text-xs');
+          }
+        } else if (key === 'size') {
+          span.setAttribute('data-size', val);
+          if (val) span.classList.add(SIZE_CLASSES[val as RichTextSize]);
+        }
+
+        try {
+          span.appendChild(range.extractContents());
+          range.insertNode(span);
+        } catch {
+          // Fallback if extraction fails
+        }
+      }
     }
-    const targetIdx = Math.min(activeSpanIdx, spans.length - 1);
-    spans[targetIdx] = {
-      ...spans[targetIdx],
-      [key]: val,
-    };
-    updateBlock(block.id, { spans });
+
+    if (!hasSelectionInside) {
+      // Apply to all spans in block
+      const currentSpans = block.spans || [{ id: 's1', text: editableRef.current.innerText || '' }];
+      const updated = currentSpans.map((s) => ({
+        ...s,
+        [key]: val,
+      }));
+      editableRef.current.innerHTML = spansToHtml(updated);
+    }
+
+    // Parse updated spans from DOM and sync to state
+    isTypingRef.current = false;
+    const nextSpans = parseSpansFromElement(editableRef.current);
+    updateBlock(block.id, { spans: nextSpans });
   };
 
-  // Text content change
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
-    const text = e.target.value;
-    const spans = [...(block.spans || [])];
-    if (spans.length === 0) {
-      spans.push({ id: 's1', text });
-    } else {
-      spans[activeSpanIdx || 0] = {
-        ...spans[activeSpanIdx || 0],
-        text,
-      };
-    }
-    updateBlock(block.id, { spans });
+  // On input typing
+  const handleInput = () => {
+    if (!editableRef.current) return;
+    isTypingRef.current = true;
+    const nextSpans = parseSpansFromElement(editableRef.current);
+    updateBlock(block.id, { spans: nextSpans });
   };
 
-  const currentSpan = block.spans?.[activeSpanIdx] || { text: '' };
-  const fullText = block.spans?.map((s) => s.text).join('') || '';
+  // Keyboard navigation and block creation UX
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Shortcuts
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      handleToggleFormat('bold', !activeFormat.bold);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      handleToggleFormat('italic', !activeFormat.italic);
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+      e.preventDefault();
+      handleToggleFormat('underline', !activeFormat.underline);
+      return;
+    }
+
+    // Enter key creates new block or list item
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = editableRef.current?.innerText.trim() || '';
+
+      // If empty list or todo item, convert back to paragraph
+      if (
+        (block.type === 'bullet-list' || block.type === 'numbered-list' || block.type === 'todo-list') &&
+        text === ''
+      ) {
+        convertBlockType(block.id, 'paragraph');
+        return;
+      }
+
+      // If in a list or todo item, create next list item
+      if (block.type === 'bullet-list' || block.type === 'numbered-list' || block.type === 'todo-list') {
+        addBlock(block.type, index);
+        return;
+      }
+
+      // Default: create a new paragraph block right below
+      addBlock('paragraph', index);
+      return;
+    }
+
+    // Backspace on empty block: delete block and focus previous
+    if (e.key === 'Backspace') {
+      const text = editableRef.current?.innerText || '';
+      if (text === '' && activeDocument && activeDocument.blocks.length > 1) {
+        e.preventDefault();
+        deleteBlock(block.id);
+        return;
+      }
+    }
+
+    // Tab / Shift+Tab indent
+    if (e.key === 'Tab') {
+      if (block.type === 'bullet-list' || block.type === 'numbered-list' || block.type === 'todo-list') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleIndent('out');
+        } else {
+          handleIndent('in');
+        }
+      }
+    }
+  };
 
   // Render Rich Text Spans in Read Mode
   const renderReadSpans = (spans: RichTextSpan[]) => {
@@ -152,23 +468,6 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
     }
 
     return spans.map((span) => {
-      const colorClasses: Record<string, string> = {
-        red: 'text-red-600 dark:text-red-400',
-        green: 'text-emerald-600 dark:text-emerald-400',
-        blue: 'text-blue-600 dark:text-blue-400',
-        amber: 'text-amber-600 dark:text-amber-400',
-        purple: 'text-purple-600 dark:text-purple-400',
-        pink: 'text-pink-600 dark:text-pink-400',
-        muted: 'text-zinc-400 dark:text-zinc-500',
-      };
-
-      const sizeClasses: Record<string, string> = {
-        sm: 'text-xs',
-        base: 'text-sm',
-        lg: 'text-base',
-        xl: 'text-lg',
-      };
-
       let content: React.ReactNode = span.text;
 
       // Search match highlighting
@@ -195,8 +494,8 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
             span.strikethrough && 'line-through text-zinc-400 dark:text-zinc-500',
             span.code &&
               'font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 px-1 py-0.5 rounded text-xs',
-            span.color && colorClasses[span.color],
-            span.size && sizeClasses[span.size]
+            span.color && span.color !== 'default' ? COLOR_CLASSES[span.color] : '',
+            span.size && SIZE_CLASSES[span.size]
           )}
         >
           {content}
@@ -222,9 +521,32 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
     if (!block.tableData) return;
     const tableData: TableData = JSON.parse(JSON.stringify(block.tableData));
     if (isHeader) {
-      tableData.headers[colIndex].spans = [{ id: 's', text, bold: true }];
+      const prevSpans = tableData.headers[colIndex].spans || [];
+      const first = prevSpans[0] || { id: 's', bold: true };
+      tableData.headers[colIndex].spans = [{ ...first, text }];
     } else {
-      tableData.rows[rowIndex][colIndex].spans = [{ id: 's', text }];
+      const prevSpans = tableData.rows[rowIndex][colIndex].spans || [];
+      const first = prevSpans[0] || { id: 's' };
+      tableData.rows[rowIndex][colIndex].spans = [{ ...first, text }];
+    }
+    updateBlock(block.id, { tableData });
+  };
+
+  const handleCycleCellColor = (rowIndex: number, colIndex: number, isHeader = false) => {
+    if (!block.tableData) return;
+    const tableData: TableData = JSON.parse(JSON.stringify(block.tableData));
+    const colors: RichTextColor[] = ['default', 'green', 'blue', 'purple', 'amber', 'red', 'cyan'];
+
+    if (isHeader) {
+      const spans = tableData.headers[colIndex].spans || [];
+      const curColor = spans[0]?.color || 'default';
+      const nextIdx = (colors.indexOf(curColor) + 1) % colors.length;
+      tableData.headers[colIndex].spans = [{ ...(spans[0] || {}), id: 's', color: colors[nextIdx], bold: true, text: spans[0]?.text || '' }];
+    } else {
+      const spans = tableData.rows[rowIndex][colIndex].spans || [];
+      const curColor = spans[0]?.color || 'default';
+      const nextIdx = (colors.indexOf(curColor) + 1) % colors.length;
+      tableData.rows[rowIndex][colIndex].spans = [{ ...(spans[0] || {}), id: 's', color: colors[nextIdx], text: spans[0]?.text || '' }];
     }
     updateBlock(block.id, { tableData });
   };
@@ -277,7 +599,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
   // Indentation style for lists
   const indentPadding = (block.level || 0) * 22;
 
-  // Heading font sizes
+  // Heading styles
   const headingStyles: Record<string, string> = {
     'heading-1': 'text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 my-2',
     'heading-2': 'text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 my-1.5',
@@ -319,31 +641,50 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
         <table className="w-full border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800/60">
-              {td.headers.map((h, colIdx) => (
-                <th key={h.id || colIdx} className="p-2 font-semibold text-zinc-900 dark:text-zinc-100">
-                  {isEditMode ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        className="w-full bg-transparent font-semibold outline-none"
-                        value={h.spans.map((s) => s.text).join('')}
-                        onChange={(e) => handleTableCellChange(0, colIdx, e.target.value, true)}
-                      />
-                      {td.headers.length > 1 && (
+              {td.headers.map((h, colIdx) => {
+                const headerSpan = h.spans?.[0];
+                const headerColorClass =
+                  headerSpan?.color && headerSpan.color !== 'default'
+                    ? COLOR_CLASSES[headerSpan.color]
+                    : 'text-zinc-900 dark:text-zinc-100';
+
+                return (
+                  <th key={h.id || colIdx} className="p-2 font-semibold">
+                    {isEditMode ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          className={cn(
+                            'w-full bg-transparent font-semibold outline-none transition-colors',
+                            headerColorClass
+                          )}
+                          value={h.spans.map((s) => s.text).join('')}
+                          onChange={(e) => handleTableCellChange(0, colIdx, e.target.value, true)}
+                        />
                         <button
                           type="button"
-                          onClick={() => handleDeleteTableCol(colIdx)}
-                          className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 p-0.5"
-                          title="Удалить колонку"
+                          onClick={() => handleCycleCellColor(0, colIdx, true)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400"
+                          title="Цвет заголовка"
                         >
-                          ×
+                          <Palette className="h-3 w-3" />
                         </button>
-                      )}
-                    </div>
-                  ) : (
-                    renderReadSpans(h.spans)
-                  )}
-                </th>
-              ))}
+                        {td.headers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTableCol(colIdx)}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 p-0.5"
+                            title="Удалить колонку"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      renderReadSpans(h.spans)
+                    )}
+                  </th>
+                );
+              })}
               {isEditMode && (
                 <th className="w-8 p-1 text-center">
                   <button
@@ -364,21 +705,44 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
                 key={rowIdx}
                 className="border-b border-zinc-100 last:border-0 dark:border-zinc-850 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30"
               >
-                {row.map((cell, colIdx) => (
-                  <td key={cell.id || colIdx} className="p-2 text-zinc-700 dark:text-zinc-300">
-                    {isEditMode ? (
-                      <input
-                        className="w-full bg-transparent outline-none"
-                        value={cell.spans.map((s) => s.text).join('')}
-                        onChange={(e) =>
-                          handleTableCellChange(rowIdx, colIdx, e.target.value, false)
-                        }
-                      />
-                    ) : (
-                      renderReadSpans(cell.spans)
-                    )}
-                  </td>
-                ))}
+                {row.map((cell, colIdx) => {
+                  const cellSpan = cell.spans?.[0];
+                  const cellColorClass =
+                    cellSpan?.color && cellSpan.color !== 'default'
+                      ? COLOR_CLASSES[cellSpan.color]
+                      : 'text-zinc-700 dark:text-zinc-300';
+                  const cellBoldClass = cellSpan?.bold ? 'font-bold' : '';
+
+                  return (
+                    <td key={cell.id || colIdx} className="p-2">
+                      {isEditMode ? (
+                        <div className="flex items-center gap-1 group/cell">
+                          <input
+                            className={cn(
+                              'w-full bg-transparent outline-none transition-colors',
+                              cellColorClass,
+                              cellBoldClass
+                            )}
+                            value={cell.spans.map((s) => s.text).join('')}
+                            onChange={(e) =>
+                              handleTableCellChange(rowIdx, colIdx, e.target.value, false)
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCycleCellColor(rowIdx, colIdx, false)}
+                            className="opacity-0 group-hover/cell:opacity-100 transition-opacity p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400"
+                            title="Сменить цвет ячейки"
+                          >
+                            <Palette className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        renderReadSpans(cell.spans)
+                      )}
+                    </td>
+                  );
+                })}
                 {isEditMode && (
                   <td className="w-8 p-1 text-center">
                     {td.rows.length > 1 && (
@@ -415,19 +779,26 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
   }
 
   // Standard Text Blocks (Paragraph, Headings, Lists, Todos)
+  const placeholderText = block.type.startsWith('heading')
+    ? `Заголовок ${block.type.split('-')[1]}...`
+    : block.type === 'todo-list'
+    ? 'Элемент списка задач...'
+    : 'Введите текст блока (выделите для форматирования)...';
+
   return (
     <div
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onContextMenu={handleContextMenu}
       style={{ paddingLeft: `${indentPadding}px` }}
       className="group relative my-1 transition-all"
     >
       {/* Block Controls / Floating Toolbar when focused in edit mode */}
       {isEditMode && showToolbar && (
-        <div className="absolute -top-9 left-0 z-30 animate-in fade-in zoom-in-95">
+        <div
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute -top-10 left-0 z-30 animate-in fade-in zoom-in-95"
+        >
           <InlineRichToolbar
-            activeSpan={currentSpan}
+            activeSpan={activeFormat}
             onToggleFormat={handleToggleFormat}
           />
         </div>
@@ -435,7 +806,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
 
       {/* Left-side drag/menu handle in Edit Mode */}
       {isEditMode && (
-        <div className="absolute -left-7 top-1.5 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute -left-7 top-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             onClick={handleContextMenu}
@@ -481,7 +852,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
 
         {/* Numbered List Counter */}
         {block.type === 'numbered-list' && (
-          <span className="mt-0.5 shrink-0 font-medium text-xs text-zinc-400 dark:text-zinc-500">
+          <span className="mt-0.5 shrink-0 font-medium text-xs text-zinc-400 dark:text-zinc-500 select-none">
             {index + 1}.
           </span>
         )}
@@ -501,37 +872,33 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
           </button>
         )}
 
-        {/* Text Area / Render */}
-        <div className="flex-1">
+        {/* Content Area: Rich Text in Both Edit and Read Modes */}
+        <div className="flex-1 min-w-0">
           {isEditMode ? (
-            <div className="relative">
-              <textarea
-                rows={1}
-                value={fullText}
-                onFocus={() => setShowToolbar(true)}
-                onBlur={() => setTimeout(() => setShowToolbar(false), 200)}
-                onChange={handleTextChange}
-                placeholder={
-                  block.type.startsWith('heading')
-                    ? `Заголовок ${block.type.split('-')[1]}...`
-                    : block.type === 'todo-list'
-                    ? 'Элемент списка задач...'
-                    : 'Введите текст блока (выделите для форматирования)...'
+            <div
+              className="relative"
+              onFocus={() => setShowToolbar(true)}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setShowToolbar(false);
                 }
+              }}
+            >
+              <div
+                ref={editableRef}
+                id={`block-editable-${block.id}`}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={handleInput}
+                onKeyDown={handleKeyDown}
+                data-placeholder={placeholderText}
                 className={cn(
-                  'w-full resize-none bg-transparent outline-none transition-colors border-b border-transparent focus:border-zinc-200 dark:focus:border-zinc-800',
-                  block.type.startsWith('heading') ? headingStyles[block.type] : 'text-sm text-zinc-800 dark:text-zinc-200',
+                  'w-full min-h-[1.5em] bg-transparent outline-none transition-colors border-b border-transparent focus:border-zinc-200 dark:focus:border-zinc-800 break-words',
+                  block.type.startsWith('heading')
+                    ? headingStyles[block.type]
+                    : 'text-sm leading-relaxed text-zinc-900 dark:text-zinc-100',
                   block.type === 'todo-list' && block.checked && 'line-through text-zinc-400 dark:text-zinc-500'
                 )}
-                style={{
-                  height: 'auto',
-                  overflow: 'hidden',
-                }}
-                onInput={(e) => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = `${target.scrollHeight}px`;
-                }}
               />
             </div>
           ) : (
@@ -539,7 +906,7 @@ export const BlockRenderer: React.FC<BlockRendererProps> = ({
               className={cn(
                 block.type.startsWith('heading')
                   ? headingStyles[block.type]
-                  : 'text-sm leading-relaxed text-zinc-800 dark:text-zinc-200',
+                  : 'text-sm leading-relaxed text-zinc-900 dark:text-zinc-100',
                 block.type === 'todo-list' && block.checked && 'line-through text-zinc-400 dark:text-zinc-500'
               )}
             >

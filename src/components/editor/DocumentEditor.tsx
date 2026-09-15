@@ -33,7 +33,7 @@ export const DocumentEditor: React.FC = () => {
     <div
       id="kuwnote-document-editor"
       className={cn(
-        'mx-auto w-full max-w-4xl p-6 transition-all',
+        'mx-auto w-full max-w-4xl px-8 sm:px-12 py-6 pb-36 transition-all',
         fontClasses[settings.fontFamily || 'sans'],
         sizeClasses[settings.fontSize || 'normal']
       )}

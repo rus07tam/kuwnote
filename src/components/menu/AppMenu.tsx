@@ -104,13 +104,13 @@ export const AppMenu: React.FC = () => {
       id="kuwnote-app-menu"
       style={{ width: `${layout.menuWidth}px` }}
       className={cn(
-        'group/menu z-30 flex flex-col select-none transition-all duration-150',
+        'group/menu relative z-30 flex flex-col select-none transition-all duration-150',
         'border-zinc-200/80 bg-white/95 dark:border-zinc-800/80 dark:bg-zinc-900/95 backdrop-blur-md',
         // Positioning
         isLeft ? 'order-first border-r' : 'order-last border-l',
         // Floating styling
         isFloating && [
-          'shadow-2xl rounded-2xl my-3 border',
+          'shadow-2xl rounded-2xl my-3 border overflow-hidden',
           isLeft ? 'ml-3' : 'mr-3',
           'h-[calc(100%-1.5rem)]',
         ],
