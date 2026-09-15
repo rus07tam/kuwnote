@@ -6,6 +6,7 @@ on:
       - 'src/**'
       - 'src-tauri/**'
       - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       build_type:
@@ -34,7 +35,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -45,10 +46,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android NDK & Platform Tools
-        run: |
-          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.3.11579264" "build-tools;34.0.0" "platforms;android-34"
-          echo "NDK_HOME=${ANDROID_HOME}/ndk/26.3.11579264" >> $GITHUB_ENV
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          link-to-sdk: true
 
       - name: Setup Rust with Android targets
         uses: dtolnay/rust-toolchain@stable
@@ -58,36 +61,53 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: 'src-tauri -> target'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Build Web Frontend
         run: npm run build
 
-      - name: Initialize Android Project
+      - name: Initialize Android Target (if needed)
+        shell: bash
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
+            echo "Initializing Tauri Android target..."
             npm run tauri android init -- --ci --skip-targets-install
           fi
 
       - name: Build Android Targets
+        shell: bash
         run: |
-          npm run tauri android build -- --apk
+          BUILD_OPT="${{ github.event.inputs.build_type || 'apk' }}"
+          if [ "$BUILD_OPT" = "apk" ]; then
+            npm run tauri android build -- --apk
+          elif [ "$BUILD_OPT" = "aab" ]; then
+            npm run tauri android build -- --aab
+          else
+            npm run tauri android build -- --apk --aab
+          fi
         env:
-          NDK_HOME: ${{ env.NDK_HOME }}
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Collect Android Outputs
         id: collect
+        shell: bash
         run: |
           mkdir -p dist-android
-          find src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} dist-android/ \;
-          ls -lh dist-android
+          find src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} dist-android/ \; || true
+          ls -lh dist-android || true
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: kuwnote-android-apk
+          name: kuwnote-android-packages
           path: dist-android/*
           if-no-files-found: warn

@@ -6,6 +6,8 @@
 
 ## 📂 Файлы рабочих процессов (Workflows)
 
+> **Важно**: В репозитории сформирован и зафиксирован файл `package-lock.json`. Все воркфлоу настроены с отказоустойчивой проверкой lock-файла (`${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}`), поэтому шаг `Setup Node.js` больше не падает с ошибкой `Dependencies lock file is not found`.
+
 1. **`.github/workflows/release.yml` — Полный релизный пайплайн**
    - **Триггеры**:
      - Пуш git-тега релиза (например: `git tag v2.0.0 && git push origin v2.0.0`)

@@ -1,8 +1,12 @@
 node_modules/
 build/
 dist/
+dist-android/
 coverage/
 .DS_Store
 *.log
 .env*
 !.env.example
+target/
+src-tauri/target/
+src-tauri/gen/
