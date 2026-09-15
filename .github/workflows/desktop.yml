@@ -74,15 +74,9 @@ jobs:
 
           # Fix for npm bug #4828: optional platform-specific native binaries omitted across OSes
           if [ "${{ runner.os }}" = "Windows" ]; then
-            if [ ! -d "node_modules/@rollup/rollup-win32-x64-msvc" ]; then
-              echo "Installing Windows native rollup module..."
-              npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3
-            fi
+            npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3 @tauri-apps/cli-win32-x64-msvc@^2.11.4
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            if [ ! -d "node_modules/@rollup/rollup-darwin-arm64" ] && [ ! -d "node_modules/@rollup/rollup-darwin-x64" ]; then
-              echo "Installing macOS native rollup module..."
-              npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3
-            fi
+            npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3 @tauri-apps/cli-darwin-x64@^2.11.4 @tauri-apps/cli-darwin-arm64@^2.11.4
           fi
 
       - name: Build Web Frontend
