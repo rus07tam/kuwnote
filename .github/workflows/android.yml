@@ -18,8 +18,16 @@ on:
       - 'package-lock.json'
   workflow_dispatch:
     inputs:
+      build_mode:
+        description: 'Build Mode'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
       build_type:
-        description: 'Android Build Type'
+        description: 'Android Package Type'
         required: true
         default: 'apk'
         type: choice
@@ -104,6 +112,24 @@ jobs:
         with:
           workspaces: 'src-tauri -> target'
 
+      - name: Create Android Debug Keystore
+        shell: bash
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating standard Android debug keystore..."
+            keytool -genkey -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          ls -l ~/.android/debug.keystore
+
       - name: Install dependencies
         shell: bash
         run: |
@@ -127,32 +153,117 @@ jobs:
             chmod +x src-tauri/gen/android/gradlew
           fi
 
+      - name: Configure Gradle Signing with Debug Certificate
+        shell: bash
+        run: |
+          GRADLE_KTS="src-tauri/gen/android/app/build.gradle.kts"
+          GRADLE_GROOVY="src-tauri/gen/android/app/build.gradle"
+
+          if [ -f "$GRADLE_KTS" ]; then
+            echo "Configuring release signing config in $GRADLE_KTS..."
+            if ! grep -q 'signingConfig = signingConfigs' "$GRADLE_KTS"; then
+              sed -i 's/getByName("release") {/getByName("release") {\n            signingConfig = signingConfigs.getByName("debug")/' "$GRADLE_KTS"
+            fi
+          elif [ -f "$GRADLE_GROOVY" ]; then
+            echo "Configuring release signing config in $GRADLE_GROOVY..."
+            if ! grep -q 'signingConfig signingConfigs' "$GRADLE_GROOVY"; then
+              sed -i 's/release {/release {\n            signingConfig signingConfigs.debug/' "$GRADLE_GROOVY"
+            fi
+          fi
+
       - name: Build Android Targets
         shell: bash
         run: |
+          BUILD_MODE="${{ github.event.inputs.build_mode || 'debug' }}"
           BUILD_OPT="${{ github.event.inputs.build_type || 'apk' }}"
           TARGET_ARCH="${{ github.event.inputs.target_arch || 'aarch64' }}"
+
+          MODE_FLAG=""
+          if [ "$BUILD_MODE" = "debug" ]; then
+            MODE_FLAG="--debug"
+          fi
 
           TARGET_FLAG=""
           if [ "$TARGET_ARCH" != "all" ]; then
             TARGET_FLAG="--target $TARGET_ARCH"
           fi
 
+          echo "Running Tauri Android build (mode=$BUILD_MODE, target=$TARGET_ARCH, type=$BUILD_OPT)..."
           if [ "$BUILD_OPT" = "apk" ]; then
-            npx tauri android build --apk $TARGET_FLAG --ci
+            npx tauri android build --apk $MODE_FLAG $TARGET_FLAG --ci
           elif [ "$BUILD_OPT" = "aab" ]; then
-            npx tauri android build --aab $TARGET_FLAG --ci
+            npx tauri android build --aab $MODE_FLAG $TARGET_FLAG --ci
           else
-            npx tauri android build --apk --aab $TARGET_FLAG --ci
+            npx tauri android build --apk --aab $MODE_FLAG $TARGET_FLAG --ci
           fi
 
-      - name: Collect Android Outputs
-        id: collect
+      - name: Sign & Verify Android Artifacts with Debug Certificate
         shell: bash
         run: |
+          BUILD_TOOLS_DIR=$(ls -d /usr/local/lib/android/sdk/build-tools/* | sort -V | tail -n 1)
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+
+          echo "Found apksigner at: $APKSIGNER"
+          echo "Found zipalign at: $ZIPALIGN"
+
           mkdir -p dist-android
-          find src-tauri/gen/android -type f \( -name "*.apk" -o -name "*.aab" \) -exec cp {} dist-android/ \; || true
-          ls -lh dist-android || true
+
+          # Process all APK files
+          while IFS= read -r -d '' apk; do
+            echo "--- Checking APK: $apk ---"
+            FILENAME=$(basename "$apk")
+
+            # Check existing signature
+            if "$APKSIGNER" verify "$apk" >/dev/null 2>&1; then
+              echo "Valid signature already present on $FILENAME"
+              cp "$apk" "dist-android/$FILENAME"
+            else
+              echo "$FILENAME is unsigned or invalid. Aligning and signing with debug certificate..."
+              OUTNAME="${FILENAME/-unsigned/-signed}"
+              if [ "$OUTNAME" = "$FILENAME" ]; then
+                OUTNAME="signed-$FILENAME"
+              fi
+
+              # Zipalign
+              "$ZIPALIGN" -f -p 4 "$apk" "dist-android/$OUTNAME" || cp "$apk" "dist-android/$OUTNAME"
+
+              # Sign with apksigner (v1, v2, v3 schemes)
+              "$APKSIGNER" sign \
+                --ks ~/.android/debug.keystore \
+                --ks-pass pass:android \
+                --key-pass pass:android \
+                --ks-key-alias androiddebugkey \
+                --v1-signing-enabled true \
+                --v2-signing-enabled true \
+                --v3-signing-enabled true \
+                "dist-android/$OUTNAME"
+
+              # Also maintain primary output name as signed copy
+              cp "dist-android/$OUTNAME" "dist-android/$FILENAME"
+            fi
+          done < <(find src-tauri/gen/android -type f -name "*.apk" -print0)
+
+          # Process any AAB bundles
+          while IFS= read -r -d '' aab; do
+            echo "--- Processing AAB: $aab ---"
+            FILENAME=$(basename "$aab")
+            cp "$aab" "dist-android/$FILENAME"
+            jarsigner -keystore ~/.android/debug.keystore \
+              -storepass android -keypass android \
+              "dist-android/$FILENAME" androiddebugkey || true
+          done < <(find src-tauri/gen/android -type f -name "*.aab" -print0)
+
+          # Verify all final APK packages in dist-android
+          echo "=== Verification Results for Uploaded APKs ==="
+          for apk in dist-android/*.apk; do
+            if [ -f "$apk" ]; then
+              echo "Verifying $(basename "$apk"):"
+              "$APKSIGNER" verify --verbose "$apk"
+            fi
+          done
+
+          ls -lh dist-android
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
