@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "dev": "node scripts/ensure-native.js && vite --port=3000 --host=0.0.0.0",
+    "build": "node scripts/ensure-native.js && vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -39,6 +39,9 @@
     "vite": "^6.2.3"
   },
   "optionalDependencies": {
+    "@esbuild/darwin-arm64": "^0.25.12",
+    "@esbuild/darwin-x64": "^0.25.12",
+    "@esbuild/win32-x64": "^0.25.12",
     "@rollup/rollup-darwin-arm64": "^4.63.3",
     "@rollup/rollup-darwin-x64": "^4.63.3",
     "@rollup/rollup-linux-x64-gnu": "^4.63.3",
@@ -46,6 +49,9 @@
     "@tauri-apps/cli-darwin-arm64": "^2.11.4",
     "@tauri-apps/cli-darwin-x64": "^2.11.4",
     "@tauri-apps/cli-linux-x64-gnu": "^2.11.4",
-    "@tauri-apps/cli-win32-x64-msvc": "^2.11.4"
+    "@tauri-apps/cli-win32-x64-msvc": "^2.11.4",
+    "lightningcss-darwin-arm64": "^1.32.0",
+    "lightningcss-darwin-x64": "^1.32.0",
+    "lightningcss-win32-x64-msvc": "^1.32.0"
   }
 }

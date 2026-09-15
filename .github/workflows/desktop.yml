@@ -74,9 +74,9 @@ jobs:
 
           # Fix for npm bug #4828: optional platform-specific native binaries omitted across OSes
           if [ "${{ runner.os }}" = "Windows" ]; then
-            npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3 @tauri-apps/cli-win32-x64-msvc@^2.11.4
+            npm install --no-save @rollup/rollup-win32-x64-msvc@^4.63.3 @tauri-apps/cli-win32-x64-msvc@^2.11.4 lightningcss-win32-x64-msvc@^1.32.0 @esbuild/win32-x64@^0.25.12
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3 @tauri-apps/cli-darwin-x64@^2.11.4 @tauri-apps/cli-darwin-arm64@^2.11.4
+            npm install --no-save @rollup/rollup-darwin-x64@^4.63.3 @rollup/rollup-darwin-arm64@^4.63.3 @tauri-apps/cli-darwin-x64@^2.11.4 @tauri-apps/cli-darwin-arm64@^2.11.4 lightningcss-darwin-x64@^1.32.0 lightningcss-darwin-arm64@^1.32.0 @esbuild/darwin-x64@^0.25.12 @esbuild/darwin-arm64@^0.25.12
           fi
 
       - name: Build Web Frontend

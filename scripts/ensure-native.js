@@ -11,17 +11,35 @@ const requiredPackages = [];
 
 if (platform === 'darwin') {
   if (arch === 'arm64') {
-    requiredPackages.push('@tauri-apps/cli-darwin-arm64', '@rollup/rollup-darwin-arm64');
+    requiredPackages.push(
+      '@tauri-apps/cli-darwin-arm64',
+      '@rollup/rollup-darwin-arm64',
+      'lightningcss-darwin-arm64',
+      '@esbuild/darwin-arm64'
+    );
   } else {
-    requiredPackages.push('@tauri-apps/cli-darwin-x64', '@rollup/rollup-darwin-x64');
+    requiredPackages.push(
+      '@tauri-apps/cli-darwin-x64',
+      '@rollup/rollup-darwin-x64',
+      'lightningcss-darwin-x64',
+      '@esbuild/darwin-x64'
+    );
   }
 } else if (platform === 'win32') {
   if (arch === 'x64') {
-    requiredPackages.push('@tauri-apps/cli-win32-x64-msvc', '@rollup/rollup-win32-x64-msvc');
+    requiredPackages.push(
+      '@tauri-apps/cli-win32-x64-msvc',
+      '@rollup/rollup-win32-x64-msvc',
+      'lightningcss-win32-x64-msvc',
+      '@esbuild/win32-x64'
+    );
   }
 } else if (platform === 'linux') {
   if (arch === 'x64') {
-    requiredPackages.push('@tauri-apps/cli-linux-x64-gnu', '@rollup/rollup-linux-x64-gnu');
+    requiredPackages.push(
+      '@tauri-apps/cli-linux-x64-gnu',
+      '@rollup/rollup-linux-x64-gnu'
+    );
   }
 }
 
