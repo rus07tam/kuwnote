@@ -10,7 +10,8 @@ export type RichTextColor =
   | 'amber'
   | 'purple'
   | 'pink'
-  | 'cyan';
+  | 'cyan'
+  | (string & {});
 
 export interface RichTextSpan {
   id: string;

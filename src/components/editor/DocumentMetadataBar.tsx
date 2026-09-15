@@ -42,21 +42,27 @@ export const DocumentMetadataBar: React.FC<DocumentMetadataBarProps> = ({ isEdit
   };
 
   return (
-    <div className="my-3 flex flex-wrap items-center gap-y-2 gap-x-4 border-b border-zinc-100 pb-3 text-xs text-zinc-500 dark:border-zinc-850 dark:text-zinc-400">
-      {/* Dates */}
-      <div className="flex items-center gap-1.5" title="Дата создания">
-        <Calendar className="h-3.5 w-3.5 text-zinc-400" />
-        <span>Создан: {formatDate(metadata.createdAt)}</span>
+    <div className="my-3 space-y-2 border-b border-zinc-100 pb-3 text-xs text-zinc-500 dark:border-zinc-850 dark:text-zinc-400">
+      {/* Row 1: Dates & Timestamps */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="flex items-center gap-1.5" title="Дата создания">
+          <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+          <span>Создан: {formatDate(metadata.createdAt)}</span>
+        </div>
+
+        <div className="flex items-center gap-1.5" title="Дата изменения">
+          <Clock className="h-3.5 w-3.5 text-zinc-400" />
+          <span>Изменен: {formatDate(metadata.updatedAt)}</span>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5" title="Дата изменения">
-        <Clock className="h-3.5 w-3.5 text-zinc-400" />
-        <span>Изменен: {formatDate(metadata.updatedAt)}</span>
-      </div>
+      {/* Row 2: Document Tags on a separate line */}
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <div className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 mr-1">
+          <Tag className="h-3.5 w-3.5" />
+          <span>Теги:</span>
+        </div>
 
-      {/* Tags section */}
-      <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-        <Tag className="h-3.5 w-3.5 text-zinc-400 mr-0.5" />
         {metadata.tags.length === 0 && !isAddingTag && (
           <span className="italic text-[11px] text-zinc-400">Нет тегов</span>
         )}
@@ -118,7 +124,7 @@ export const DocumentMetadataBar: React.FC<DocumentMetadataBarProps> = ({ isEdit
                 className="inline-flex items-center gap-1 rounded-md border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-600"
               >
                 <Plus className="h-3 w-3" />
-                <span>Тег</span>
+                <span>Добавить тег</span>
               </button>
             )}
           </>

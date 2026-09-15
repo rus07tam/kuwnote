@@ -104,17 +104,18 @@ export const AppMenu: React.FC = () => {
       id="kuwnote-app-menu"
       style={{ width: `${layout.menuWidth}px` }}
       className={cn(
-        'group/menu relative z-30 flex flex-col select-none transition-all duration-150',
+        'group/menu flex flex-col select-none transition-all duration-150',
         'border-zinc-200/80 bg-white/95 dark:border-zinc-800/80 dark:bg-zinc-900/95 backdrop-blur-md',
-        // Positioning
-        isLeft ? 'order-first border-r' : 'order-last border-l',
-        // Floating styling
-        isFloating && [
-          'shadow-2xl rounded-2xl my-3 border overflow-hidden',
-          isLeft ? 'ml-3' : 'mr-3',
-          'h-[calc(100%-1.5rem)]',
-        ],
-        !isFloating && 'h-full',
+        // When floating, take absolute overlay positioning so it doesn't push the content area
+        isFloating
+          ? cn(
+              'absolute z-40 top-3 bottom-3 shadow-2xl rounded-2xl border overflow-hidden',
+              isLeft ? 'left-3' : 'right-3'
+            )
+          : cn(
+              'relative z-30 h-full',
+              isLeft ? 'order-first border-r' : 'order-last border-l'
+            ),
         isResizing && 'transition-none select-none'
       )}
     >
@@ -139,61 +140,26 @@ export const AppMenu: React.FC = () => {
       {/* Main Panel Content Area */}
       <div className="flex-1 overflow-hidden">{renderMenuContent()}</div>
 
-      {/* Fixed Centered Bottom Toolbar */}
-      <div
-        id="menu-bottom-toolbar"
-        className="sticky bottom-0 z-20 flex items-center justify-center gap-1 border-t border-zinc-200/80 bg-zinc-50/90 px-3 py-2 backdrop-blur-xs dark:border-zinc-800/80 dark:bg-zinc-950/90"
-      >
-        {/* Quick new document */}
-        <Tooltip content="Новая заметка" side="top">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            onClick={() => openModal('create-item', { type: 'document', parentId: null })}
-          >
-            <FilePlus className="h-4 w-4" />
-          </Button>
-        </Tooltip>
-
-        {/* Quick new folder */}
-        <Tooltip content="Новая папка" side="top">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            onClick={() => openModal('create-item', { type: 'folder', parentId: null })}
-          >
-            <FolderPlus className="h-4 w-4" />
-          </Button>
-        </Tooltip>
-
-        {/* Plugin extension bottom actions */}
-        {pluginBottomActions.map((action) => (
-          <Tooltip key={action.id} content={action.label} side="top">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              onClick={action.onClick}
-            >
-              <DynamicIcon name={action.iconName} className="h-4 w-4" />
-            </Button>
-          </Tooltip>
-        ))}
-
-        {/* Collapse toggle */}
-        <Tooltip content="Свернуть меню" side="top">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800"
-            onClick={toggleMenu}
-          >
-            {isLeft ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </Button>
-        </Tooltip>
-      </div>
+      {/* Optional Plugin Bottom Actions or Collapse Button (if plugin actions exist) */}
+      {pluginBottomActions.length > 0 && (
+        <div
+          id="menu-bottom-toolbar"
+          className="sticky bottom-0 z-20 flex items-center justify-center gap-1 border-t border-zinc-200/80 bg-zinc-50/90 px-3 py-1.5 backdrop-blur-xs dark:border-zinc-800/80 dark:bg-zinc-950/90"
+        >
+          {pluginBottomActions.map((action) => (
+            <Tooltip key={action.id} content={action.label} side="top">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                onClick={action.onClick}
+              >
+                <DynamicIcon name={action.iconName} className="h-4 w-4" />
+              </Button>
+            </Tooltip>
+          ))}
+        </div>
+      )}
     </aside>
   );
 };

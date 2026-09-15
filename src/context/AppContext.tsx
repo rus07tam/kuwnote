@@ -62,6 +62,7 @@ interface AppContextType {
   updateBlock: (blockId: string, updates: Partial<DocumentBlock>) => void;
   duplicateBlock: (blockId: string) => void;
   moveBlock: (blockId: string, direction: 'up' | 'down') => void;
+  reorderBlock: (sourceIndex: number, targetIndex: number) => void;
   deleteBlock: (blockId: string) => void;
   convertBlockType: (blockId: string, newType: BlockType) => void;
   toggleTodoBlock: (blockId: string) => void;
@@ -92,6 +93,71 @@ interface AppContextType {
   openModal: (modalId: string, data?: any) => void;
   closeModal: () => void;
 }
+
+export const ACCENT_COLOR_PRESETS: Record<string, {
+  hex: string;
+  hover: string;
+  light: string;
+  border: string;
+  ring: string;
+}> = {
+  indigo: {
+    hex: '#6366f1',
+    hover: '#4f46e5',
+    light: 'rgba(99, 102, 241, 0.14)',
+    border: 'rgba(99, 102, 241, 0.35)',
+    ring: 'rgba(99, 102, 241, 0.25)',
+  },
+  emerald: {
+    hex: '#10b981',
+    hover: '#059669',
+    light: 'rgba(16, 185, 129, 0.14)',
+    border: 'rgba(16, 185, 129, 0.35)',
+    ring: 'rgba(16, 185, 129, 0.25)',
+  },
+  sapphire: {
+    hex: '#2563eb',
+    hover: '#1d4ed8',
+    light: 'rgba(37, 99, 235, 0.14)',
+    border: 'rgba(37, 99, 235, 0.35)',
+    ring: 'rgba(37, 99, 235, 0.25)',
+  },
+  amber: {
+    hex: '#f59e0b',
+    hover: '#d97706',
+    light: 'rgba(245, 158, 11, 0.16)',
+    border: 'rgba(245, 158, 11, 0.35)',
+    ring: 'rgba(245, 158, 11, 0.25)',
+  },
+  rose: {
+    hex: '#f43f5e',
+    hover: '#e11d48',
+    light: 'rgba(244, 63, 94, 0.14)',
+    border: 'rgba(244, 63, 94, 0.35)',
+    ring: 'rgba(244, 63, 94, 0.25)',
+  },
+  violet: {
+    hex: '#8b5cf6',
+    hover: '#7c3aed',
+    light: 'rgba(139, 92, 246, 0.14)',
+    border: 'rgba(139, 92, 246, 0.35)',
+    ring: 'rgba(139, 92, 246, 0.25)',
+  },
+  cyan: {
+    hex: '#06b6d4',
+    hover: '#0891b2',
+    light: 'rgba(6, 182, 212, 0.14)',
+    border: 'rgba(6, 182, 212, 0.35)',
+    ring: 'rgba(6, 182, 212, 0.25)',
+  },
+  'dynamic-android': {
+    hex: '#0d9488',
+    hover: '#0f766e',
+    light: 'rgba(13, 148, 136, 0.14)',
+    border: 'rgba(13, 148, 136, 0.35)',
+    ring: 'rgba(13, 148, 136, 0.25)',
+  },
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -164,6 +230,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         root.classList.remove('dark');
       }
     }
+
+    // Apply accent color dynamically to CSS variables & data attribute
+    const accentKey = settings.accentColor || 'indigo';
+    const accent = ACCENT_COLOR_PRESETS[accentKey] || ACCENT_COLOR_PRESETS.indigo;
+    root.style.setProperty('--accent-color', accent.hex);
+    root.style.setProperty('--accent-color-hover', accent.hover);
+    root.style.setProperty('--accent-color-light', accent.light);
+    root.style.setProperty('--accent-color-border', accent.border);
+    root.style.setProperty('--accent-color-ring', accent.ring);
+    root.setAttribute('data-accent', accentKey);
   }, [settings]);
 
   // Responsive default layout check on screen resize
@@ -620,6 +696,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [activeDocId]
   );
 
+  const reorderBlock = useCallback(
+    (sourceIndex: number, targetIndex: number) => {
+      if (!activeDocId) return;
+      if (sourceIndex === targetIndex) return;
+      setDocuments((prev) => {
+        const doc = prev[activeDocId];
+        if (!doc) return prev;
+        const blocks = [...doc.blocks];
+        if (
+          sourceIndex < 0 ||
+          sourceIndex >= blocks.length ||
+          targetIndex < 0 ||
+          targetIndex >= blocks.length
+        ) {
+          return prev;
+        }
+        const [moved] = blocks.splice(sourceIndex, 1);
+        blocks.splice(targetIndex, 0, moved);
+        return {
+          ...prev,
+          [activeDocId]: {
+            ...doc,
+            blocks,
+            metadata: { ...doc.metadata, updatedAt: Date.now() },
+          },
+        };
+      });
+    },
+    [activeDocId]
+  );
+
   const deleteBlock = useCallback(
     (blockId: string) => {
       if (!activeDocId) return;
@@ -796,6 +903,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateBlock,
       duplicateBlock,
       moveBlock,
+      reorderBlock,
       deleteBlock,
       convertBlockType,
       toggleTodoBlock,
@@ -844,6 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateBlock,
       duplicateBlock,
       moveBlock,
+      reorderBlock,
       deleteBlock,
       convertBlockType,
       toggleTodoBlock,

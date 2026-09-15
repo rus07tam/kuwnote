@@ -38,6 +38,12 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
   const [showSizes, setShowSizes] = React.useState(false);
 
   const activeColorObj = COLOR_OPTIONS.find((c) => c.id === activeSpan.color);
+  const isCustomColor = Boolean(
+    activeSpan.color &&
+      activeSpan.color !== 'default' &&
+      !COLOR_OPTIONS.some((c) => c.id === activeSpan.color)
+  );
+  const currentDotHex = isCustomColor ? activeSpan.color : activeColorObj?.dotHex;
 
   return (
     <div
@@ -142,10 +148,10 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
           title="Цвет текста"
         >
           <Palette className="h-3.5 w-3.5" />
-          {activeColorObj && activeColorObj.id !== 'default' && (
+          {currentDotHex && (
             <span
               className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full ring-1 ring-white dark:ring-zinc-900"
-              style={{ backgroundColor: activeColorObj.dotHex }}
+              style={{ backgroundColor: currentDotHex }}
             />
           )}
         </button>
@@ -153,26 +159,46 @@ export const InlineRichToolbar: React.FC<InlineRichToolbarProps> = ({
         {showColors && (
           <div
             onMouseDown={(e) => e.preventDefault()}
-            className="absolute left-0 top-full mt-1 z-50 flex gap-1 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+            className="absolute left-0 top-full mt-1 z-50 flex flex-col gap-1.5 rounded-lg border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 min-w-[190px]"
           >
-            {COLOR_OPTIONS.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onToggleFormat('color', c.id);
-                  setShowColors(false);
-                }}
-                className={cn(
-                  'flex h-5 w-5 items-center justify-center rounded-full hover:scale-125 transition-transform',
-                  activeSpan.color === c.id && 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900'
-                )}
-                title={c.label}
-              >
-                <span className={cn('h-3.5 w-3.5 rounded-full shadow-2xs', c.class)} />
-              </button>
-            ))}
+            <div className="flex flex-wrap items-center gap-1">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    onToggleFormat('color', c.id);
+                    setShowColors(false);
+                  }}
+                  className={cn(
+                    'flex h-5 w-5 items-center justify-center rounded-full hover:scale-125 transition-transform',
+                    activeSpan.color === c.id && 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-zinc-900'
+                  )}
+                  title={c.label}
+                >
+                  <span className={cn('h-3.5 w-3.5 rounded-full shadow-2xs', c.class)} />
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Color Selector */}
+            <div className="flex items-center justify-between border-t border-zinc-100 pt-1.5 dark:border-zinc-800">
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-400">Кастомный цвет:</span>
+              <label className="relative flex items-center gap-1.5 cursor-pointer rounded px-1.5 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                <input
+                  type="color"
+                  value={isCustomColor ? activeSpan.color : '#6366f1'}
+                  onChange={(e) => {
+                    onToggleFormat('color', e.target.value);
+                  }}
+                  className="h-4 w-4 cursor-pointer rounded border-0 p-0 bg-transparent"
+                />
+                <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-300">
+                  {isCustomColor ? activeSpan.color : 'Палитра'}
+                </span>
+              </label>
+            </div>
           </div>
         )}
       </div>
